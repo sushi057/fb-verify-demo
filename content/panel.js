@@ -218,6 +218,165 @@
   }
 
   /**
+   * Builds the step list. Every step opens what that step produced, so the
+   * reader can walk the check instead of reading one long report.
+   *
+   * @param {object} r The result.
+   * @param {string[]} queries The searches the run made.
+   * @returns {Element}
+   */
+  function buildSteps(r, queries) {
+    const wrap = el("div", "vf-steps");
+    wrap.appendChild(el("div", "vf-block-title", "The check, step by step"));
+
+    const rows = [
+      {
+        mark: "0",
+        label: "Read the image",
+        note: r.images_read ? "text read" : "no image",
+        empty: !r.images_read,
+        build: function () {
+          return el("div", "vf-ev-quote", r.image_text || "The post had no image.");
+        }
+      },
+      {
+        mark: "a",
+        label: "Break out the claims",
+        note: (r.claims || []).length + "",
+        build: function () {
+          const ul = el("ul", "vf-list");
+          (r.claims || []).forEach(function (c) { ul.appendChild(el("li", null, c)); });
+          return ul;
+        }
+      },
+      {
+        mark: "b",
+        label: "Weigh the salience",
+        note: r.salience,
+        build: function () {
+          const box = el("div");
+          box.appendChild(el("div", "vf-text", r.salience_reasoning || ""));
+          if ((r.expected_sources || []).length) {
+            box.appendChild(el("div", "vf-note",
+              "Would appear in: " + r.expected_sources.join(", ")));
+          }
+          if (r.claim_scope === "foreign") {
+            box.appendChild(el("div", "vf-note",
+              "The claim is about another country, so the Nepali sources " +
+              "cannot settle it."));
+          }
+          return box;
+        }
+      },
+      {
+        mark: "c",
+        label: "Search the sources",
+        note: r.pages_retrieved + " pages",
+        build: function () {
+          const box = el("div");
+          if (queries.length) {
+            const ul = el("ul", "vf-queries");
+            queries.forEach(function (q) { ul.appendChild(el("li", null, q)); });
+            box.appendChild(ul);
+          }
+          const cover = renderCoverage(r);
+          if (cover) box.appendChild(cover);
+          return box;
+        }
+      },
+      {
+        mark: "d",
+        label: "Judge each source",
+        note: countStances(r),
+        build: function () {
+          const box = el("div");
+          if (!(r.evidence || []).length) {
+            box.appendChild(el("div", "vf-empty", "Nothing came back to judge."));
+          }
+          (r.evidence || []).forEach(function (e) {
+            const line = el("div", "vf-mini");
+            line.appendChild(el("span", "vf-stance vf-st-" + e.stance, e.stance));
+            line.appendChild(el("span", null, " " + e.source_name));
+            box.appendChild(line);
+          });
+          return box;
+        }
+      },
+      {
+        mark: "e",
+        label: "Apply the rules",
+        note: r.overridden ? "overrode the model" : "agreed",
+        build: function () {
+          const box = el("div");
+          box.appendChild(el("div", "vf-text", r.verdict_reasoning || ""));
+          if (r.overridden) {
+            box.appendChild(el("div", "vf-note",
+              "The model proposed " + (r.model_verdict || "nothing") +
+              ". The rules gave " + r.verdict + "."));
+          }
+          return box;
+        }
+      },
+      {
+        mark: "f",
+        label: "Check every citation",
+        note: (r.dropped_citations || []).length
+          ? (r.dropped_citations.length + " dropped")
+          : "all held",
+        build: function () {
+          if (!(r.dropped_citations || []).length) {
+            return el("div", "vf-text",
+              "Every citation was a page the search really returned.");
+          }
+          const ul = el("ul", "vf-list");
+          r.dropped_citations.forEach(function (x) { ul.appendChild(el("li", null, x)); });
+          return ul;
+        }
+      }
+    ];
+
+    rows.forEach(function (row) {
+      const item = el("div", "vf-step");
+      const btn = el("button", "vf-step-head");
+      btn.type = "button";
+      btn.setAttribute("aria-expanded", "false");
+      btn.appendChild(el("span", "vf-stage-key", row.mark));
+      btn.appendChild(el("span", "vf-step-label", row.label));
+      btn.appendChild(el("span", "vf-step-note", String(row.note || "")));
+      const panelBox = el("div", "vf-step-body");
+
+      btn.addEventListener("click", function () {
+        const open = item.classList.toggle("vf-step-open");
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+        if (open && !panelBox.childElementCount) panelBox.appendChild(row.build());
+      });
+
+      item.appendChild(btn);
+      item.appendChild(panelBox);
+      if (row.empty) item.classList.add("vf-step-quiet");
+      wrap.appendChild(item);
+    });
+
+    return wrap;
+  }
+
+  /**
+   * Counts the stances in the evidence.
+   * @param {object} r
+   * @returns {string}
+   */
+  function countStances(r) {
+    const ev = r.evidence || [];
+    const n = { supports: 0, refutes: 0, irrelevant: 0 };
+    ev.forEach(function (e) { n[e.stance] = (n[e.stance] || 0) + 1; });
+    const parts = [];
+    if (n.refutes) parts.push(n.refutes + " refute");
+    if (n.supports) parts.push(n.supports + " support");
+    if (n.irrelevant) parts.push(n.irrelevant + " aside");
+    return parts.join(", ") || "none";
+  }
+
+  /**
    * Builds the card and anchors it to the button.
    * @param {Element} anchor The Verify button.
    * @returns {object} The panel controller.
@@ -234,6 +393,8 @@
     panel.setAttribute("aria-label", "Verification record");
 
     const head = el("div", "vf-head");
+    head.title = "Drag to move";
+    head.appendChild(el("span", "vf-grip"));
     head.appendChild(el("span", "vf-head-title", "Verification record"));
     const meta = el("span", "vf-head-meta", clockNow());
     head.appendChild(meta);
@@ -273,14 +434,15 @@
     panel.__vfClose = shut;
 
     let frame = 0;
+    let moved = false;
     function reposition() {
+      if (moved) return;
       if (frame) return;
       frame = requestAnimationFrame(function () {
         frame = 0;
-        if (!document.body.contains(anchor)) {
-          shut();
-          return;
-        }
+        // Facebook rebuilds a post as it scrolls. If the button goes with it,
+        // the card stays where it is rather than vanishing mid read.
+        if (!document.body.contains(anchor)) return;
         place(panel, anchor);
       });
     }
@@ -294,10 +456,44 @@
 
     function onOutside(ev) {
       if (panel.contains(ev.target) || anchor.contains(ev.target)) return;
+      // Once the reader has moved the card, it is pinned: only the close
+      // button or Escape shuts it.
+      if (moved) return;
       shut();
     }
 
+    /**
+     * Lets the reader drag the card by its header.
+     * @param {MouseEvent} ev
+     */
+    function startDrag(ev) {
+      if (ev.button !== 0 || ev.target.closest(".vf-close")) return;
+      ev.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      const dx = ev.clientX - rect.left;
+      const dy = ev.clientY - rect.top;
+      moved = true;
+      panel.classList.add("vf-dragging");
+
+      function onMove(e) {
+        const w = panel.offsetWidth;
+        const h = panel.offsetHeight;
+        const left = Math.max(6, Math.min(e.clientX - dx, window.innerWidth - w - 6));
+        const top = Math.max(6, Math.min(e.clientY - dy, window.innerHeight - h - 6));
+        panel.style.left = Math.round(left) + "px";
+        panel.style.top = Math.round(top) + "px";
+      }
+      function onUp() {
+        document.removeEventListener("mousemove", onMove, true);
+        document.removeEventListener("mouseup", onUp, true);
+        panel.classList.remove("vf-dragging");
+      }
+      document.addEventListener("mousemove", onMove, true);
+      document.addEventListener("mouseup", onUp, true);
+    }
+
     close.addEventListener("click", shut);
+    head.addEventListener("mousedown", startDrag);
     window.addEventListener("scroll", reposition, true);
     window.addEventListener("resize", reposition);
     document.addEventListener("keydown", onKey, true);
@@ -305,6 +501,16 @@
 
     if (anchor) anchor.setAttribute("aria-expanded", "true");
     place(panel, anchor);
+
+    const queries = [];
+
+    /**
+     * Records a search the run made, so step c can show them.
+     * @param {string} q
+     */
+    function addQuery(q) {
+      if (q) queries.push(q);
+    }
 
     function setStage(key, state, note) {
       const li = nodes[key];
@@ -444,54 +650,7 @@
       }
       body.appendChild(ev);
 
-      // Everything below is detail. It stays folded until it is asked for.
-      const det = document.createElement("details");
-      det.className = "vf-details";
-      const sum = document.createElement("summary");
-      sum.textContent = "How this was checked";
-      det.appendChild(sum);
-
-      const cover = renderCoverage(r);
-      if (cover) det.appendChild(cover);
-
-      const stagesBlock = block("Stages");
-      list.classList.add("vf-stages-done");
-      stagesBlock.appendChild(list);
-      det.appendChild(stagesBlock);
-
-      const sal = block("Salience");
-      sal.appendChild(el("div", "vf-text", r.salience_reasoning || ""));
-      if (r.claim_scope === "foreign") {
-        sal.appendChild(el("div", "vf-empty",
-          "The claim is about another country, so the Nepali sources cannot " +
-          "settle it."));
-      }
-      det.appendChild(sal);
-
-      if (r.images_read && r.image_text) {
-        const it = block("Text read from the image");
-        it.appendChild(el("div", "vf-ev-quote", trim(r.image_text, 300)));
-        det.appendChild(it);
-      }
-
-      if (r.claims && r.claims.length) {
-        const c = block("Claims checked");
-        const ul = el("ul", "vf-list");
-        r.claims.forEach(function (x) { ul.appendChild(el("li", null, x)); });
-        c.appendChild(ul);
-        det.appendChild(c);
-      }
-
-      if (r.dropped_citations && r.dropped_citations.length) {
-        const d = block("Citations dropped");
-        const ul = el("ul", "vf-list");
-        r.dropped_citations.forEach(function (x) { ul.appendChild(el("li", null, x)); });
-        d.appendChild(ul);
-        d.classList.add("vf-dropped");
-        det.appendChild(d);
-      }
-
-      body.appendChild(det);
+      body.appendChild(buildSteps(r, queries));
 
       body.appendChild(el("div", "vf-foot",
         "A model wrote this. Read the sources before you repeat it."));
@@ -519,6 +678,7 @@
     return {
       node: panel,
       close: shut,
+      addQuery: addQuery,
       setStage: setStage,
       completeThrough: completeThrough,
       showResult: function (r) {

@@ -88,6 +88,8 @@
       if (msg.type === "stage") {
         panel.completeThrough(msg.previous || null);
         panel.setStage(msg.stage, "active", msg.note);
+      } else if (msg.type === "query") {
+        panel.addQuery(msg.query);
       } else if (msg.type === "result") {
         panel.showResult(msg.result);
         port.disconnect();
@@ -178,6 +180,9 @@
       const existing = post.querySelector(":scope .vf-btn");
       const sameText = post.getAttribute(TEXT_MARK) === textKey(post);
       if (existing && sameText) return false;
+      // A button with an open card must stay. Removing it takes the card's
+      // anchor away, and the card disappears while the reader is using it.
+      if (existing && existing.getAttribute("aria-expanded") === "true") return false;
       if (existing) existing.remove();
     }
     post.setAttribute(PROCESSED, "1");

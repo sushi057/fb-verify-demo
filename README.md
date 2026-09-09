@@ -43,9 +43,13 @@ JavaScript, not as a request to the model. See [Verdict rules](#verdict-rules).
    the model invented.
 
 The card leads with the verdict, the confidence, one line on what the check
-could read, a short reason, and the sources that carried weight. The stages,
-the full reasoning, the claims, the coverage scale and any dropped citation sit
-behind **How this was checked**.
+could read, a short reason, and the sources that carried weight. Below that,
+every step of the check opens on its own: the claims it broke out, how it
+weighed the salience, the searches it really sent, the stance it gave each
+source, the rule it applied, and any citation it dropped.
+
+Drag the card by its header to move it. It stays where you put it while the
+feed scrolls, and closes with the button, Escape, or a click outside.
 
 ## Install
 
