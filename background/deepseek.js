@@ -33,7 +33,8 @@ const SEARCH_TOOL = {
       "Search the approved Nepali sources for a claim. The search is already " +
       "limited to the source allowlist. It covers the published fact checks in " +
       "full, and the recent articles of the news sites. Search in Nepali and " +
-      "in English.",
+      "in English. Keep each query to three or four words: the search joins " +
+      "every word with AND, so a long query returns nothing.",
     parameters: {
       type: "object",
       properties: {
@@ -93,6 +94,7 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
   let askedAgain = false;
   const headlineTitles = new Set();
   let windowStart = null;
+  let searchedTotal = 0;
 
   const userContent = [];
   userContent.push({
@@ -199,6 +201,8 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
             headlines: found.headlines,
             world: found.world,
             coverage: found.coverage,
+            searched: found.searched,
+            broadened: found.broadened_to,
             error: ""
           };
         },
@@ -215,6 +219,7 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
 
     done.forEach(function (job) {
       (job.headlines || []).forEach(function (h) { headlineTitles.add(h.title); });
+      searchedTotal += job.searched || 0;
       if (job.coverage && job.coverage.nepal_window_start) {
         windowStart = job.coverage.nepal_window_start;
       }
@@ -249,7 +254,15 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
               }),
               headlines: job.headlines,
               world_press: job.world,
-              coverage: job.coverage
+              coverage: job.coverage,
+              note_on_this_search: job.searched
+                ? (job.broadened
+                    ? "Your query found nothing, so it was shortened to \"" +
+                      job.broadened + "\" and run again."
+                    : "")
+                : "This search returned nothing at all, not even in the world " +
+                  "press. That usually means the query was too long. Search " +
+                  "again with three or four words."
             })
       });
     });
@@ -272,6 +285,7 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
     retrieved: retrieved,
     searchCount: searchCount,
     headlines: headlineTitles.size,
-    windowStart: windowStart
+    windowStart: windowStart,
+    searched: searchedTotal
   };
 }

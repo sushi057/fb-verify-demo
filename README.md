@@ -42,9 +42,10 @@ JavaScript, not as a request to the model. See [Verdict rules](#verdict-rules).
 7. Checks every citation against what the search really returned, and drops any
    the model invented.
 
-The panel shows every stage, the reasoning, the evidence with links and
-retrieval dates, any citation that was dropped, and the time window the news
-feeds actually covered.
+The card leads with the verdict, the confidence, one line on what the check
+could read, a short reason, and the sources that carried weight. The stages,
+the full reasoning, the claims, the coverage scale and any dropped citation sit
+behind **How this was checked**.
 
 ## Install
 
@@ -100,10 +101,12 @@ evidence and overrides the model if they disagree, saying so in the panel.
 | Nothing found | low salience | Not established |
 | Nothing found | claim dated before the feed window | Not established |
 | Nothing found | claim about another country | Not established |
-| No citable page, but the press carries the claim | any | Not established |
+| Nothing found | the post carries no date | Not established |
+| The search returned nothing anywhere | any | Not established |
+| No citable page, but the press carries the claim, at home or abroad | any | Not established |
 
-The last four rows are the guards, and each one exists because the pipeline got
-a real claim wrong without it.
+Everything below the first two rows is a guard, and each one exists because the
+pipeline called a real claim fabricated without it.
 
 - **The feed window.** A Nepali news feed holds only the last few hours of
   articles. Setopati publishes five items. So "the press did not report it"
@@ -115,9 +118,17 @@ a real claim wrong without it.
   Singapore. Absence there says nothing, so a foreign claim can be verified by
   the international feeds but never called fabricated by their silence.
 - **Salience.** A private meeting can be real and leave no public record.
-- **Press coverage.** If the press carries the claim, it is not absent. Whether
-  a headline is about *this* claim is a judgement about meaning, so the model
-  makes it; a count of headlines cannot.
+- **An undated post.** The feeds cover a few hours. If the post gives no date,
+  it cannot be placed against that window, so silence cannot convict it.
+- **A failed search.** A search that comes back empty everywhere, including the
+  world press, has said nothing about the claim. That is a broken query, not an
+  absent story. The searches are kept to three or four words for the same
+  reason: the search joins words with AND, so a long query returns nothing.
+- **Press coverage.** If the press carries the claim, it is not absent. That
+  includes the press outside the source list: a story reported abroad cannot be
+  cited here, but it is plainly not missing from the record. Whether a headline
+  is about *this* claim is a judgement about meaning, so the model makes it; a
+  count of headlines cannot.
 
 Salience itself is measured against the sources the search can read, not against
 how big the news feels. That distinction is the whole design.

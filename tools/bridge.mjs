@@ -269,7 +269,7 @@ async function handleVerify(req, res) {
 
     const result = finishRun(
       run.finalText, run.retrieved, run.searchCount, backend, send,
-      run.headlines, run.windowStart, images.length);
+      run.headlines, run.windowStart, images.length, run.searched);
     send({ type: "result", result: result });
   } catch (err) {
     send({ type: "error", message: err.message || String(err) });

@@ -101,8 +101,15 @@ true foreign story can be missing from every one of them. So absence can never
 show that a foreign claim is false.
 
 STAGE C - EVIDENCE RETRIEVAL
-Search the web for the claim. Search in Nepali and in English.
+Search for the claim. Search in Nepali and in English.
 Search for a published fact check of the claim.
+
+Keep every query to three or four words. The search joins the words with AND,
+so a long query returns nothing at all. Search for the heart of the claim, not
+for the whole sentence. "Myanmar Nepal donation" works; "Myanmar donates
+US$500,000 and 8 metric tons of pulses to Nepal flood victims" returns nothing.
+If a search returns nothing, shorten it and search again before you conclude
+anything.
 Only these sources count as evidence.
 Nepal: techpana.com, nepalfactcheck.org, kathmandupost.com, onlinekhabar.com,
 setopati.com, ekantipur.com, and any .gov.np domain.
@@ -146,13 +153,25 @@ Apply this logic. Do not shortcut it.
    INSUFFICIENT_EVIDENCE, whatever the salience. The search cannot see the
    archive, so absence is not a finding.
 5a. No evidence found AND the claim date is before the start of the feed
-   coverage window: verdict INSUFFICIENT_EVIDENCE. The feeds hold only the last
-   few hours, so they cannot show silence about an older event. A published
-   fact check still counts, because that search reads the whole archive.
+   coverage window, OR the claim carries no date at all: verdict
+   INSUFFICIENT_EVIDENCE. The feeds hold only the last few hours. If the claim
+   is older than that, or if its date cannot be read, the feeds cannot show
+   silence about it. A published fact check still counts, because that search
+   reads the whole archive.
+   Give "claim_date" whenever the post states or implies one, including "today"
+   and "tomorrow". Write "unknown" only when the post really gives no date.
 5b. No evidence found AND the claim scope is "foreign": verdict
    INSUFFICIENT_EVIDENCE, whatever the salience. The international list is short
    and it holds recent articles only, so it cannot show that a foreign claim is
    false. Supporting evidence from it IS enough to answer VERIFIED.
+5c. The searches returned nothing at all, anywhere, not even in the world
+   press: verdict INSUFFICIENT_EVIDENCE. That is a failed search, not an
+   absent claim. Say so plainly.
+5d. No evidence found, but the world press carries this same event: verdict
+   INSUFFICIENT_EVIDENCE. A story reported abroad is not absent from the
+   record. The allowlist simply cannot cite it. Set "world_press_carries_claim"
+   to true when an item in "world_press" is about this same event, even though
+   its source is outside the allowlist.
 6. A headline names THIS claim: the press does carry the story, so the claim is
    NOT absent. Never answer FABRICATED on absence in that case. Set
    "press_carries_claim" to true only when a headline is about this same event.
@@ -178,6 +197,7 @@ Write your reasoning first. Then end your reply with one JSON object inside
   "claim_date": "YYYY-MM-DD" | "unknown",
   "claim_scope": "nepal" | "foreign",
   "press_carries_claim": true | false,
+  "world_press_carries_claim": true | false,
   "salience_reasoning": "...",
   "expected_sources": ["..."],
   "evidence": [
@@ -310,12 +330,16 @@ export function applyVerdictLogic(parsed, evidence, context) {
   // the window, their silence is meaningless. This is measured, not guessed:
   // the window start comes from the oldest article in the shortest feed.
   const windowStart = (context && context.windowStart) || null;
+  const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(parsed.claim_date || "");
   let beforeWindow = false;
-  if (windowStart && /^\d{4}-\d{2}-\d{2}$/.test(parsed.claim_date || "")) {
+  if (windowStart && hasDate) {
     // Compare whole days. A feed that starts at 11:00 today still says
     // something about the whole of today.
     beforeWindow = parsed.claim_date < String(windowStart).slice(0, 10);
   }
+  // An undated claim cannot be placed against a window of a few hours, so
+  // silence in the feeds cannot convict it either.
+  const undated = Boolean(windowStart) && !hasDate;
   // The allowlist holds Nepali sources only. Silence in them says nothing
   // about an event in another country.
   const foreign = parsed.claim_scope === "foreign";
@@ -323,7 +347,17 @@ export function applyVerdictLogic(parsed, evidence, context) {
   // the model makes it. A count of headlines cannot: a search for a fake
   // 7 day holiday returns every headline about any holiday.
   const pressCarries = parsed.press_carries_claim === true;
+  // A story the world press reports is not missing from the record, even when
+  // no allowed source can be cited for it.
+  const worldCarries = parsed.world_press_carries_claim === true;
   const headlines = (context && Number(context.headlines)) || 0;
+
+  // A search that returned nothing anywhere has told us nothing. Treating it
+  // as absence is how a true claim gets called fake, so it cannot.
+  const searched = context && context.searched !== undefined
+    ? Number(context.searched)
+    : null;
+  const searchFailed = searched === 0;
   const refutes = evidence.filter(function (e) { return e.stance === "refutes"; });
   const supports = evidence.filter(function (e) { return e.stance === "supports"; });
 
@@ -337,25 +371,35 @@ export function applyVerdictLogic(parsed, evidence, context) {
   } else if (supports.length > 0) {
     verdict = "VERIFIED";
     confidence = Math.max(Number(parsed.confidence) || 0, 0.7);
-  } else if (pressCarries) {
+  } else if (searchFailed) {
+    verdict = "INSUFFICIENT_EVIDENCE";
+    confidence = 0.3;
+    reasoning =
+      "The searches came back empty everywhere, including the world press. " +
+      "That points at the search, not at the claim. Nothing here shows the " +
+      "claim is false. " + reasoning;
+  } else if (pressCarries || worldCarries) {
     // The press does carry this story. It is not absent, so it cannot be
     // called fabricated on absence. There is no citable URL, so it is not
     // verified either.
     verdict = "INSUFFICIENT_EVIDENCE";
     confidence = 0.45;
-    reasoning =
-      "The allowed sources do carry this story" +
-      (headlines ? " (" + headlines + " headline(s) matched)" : "") +
-      ", but the search could not reach a citable page for it. The claim is " +
+    reasoning = (pressCarries
+      ? "The allowed sources do carry this story" +
+        (headlines ? " (" + headlines + " headline(s) matched)" : "") + ", "
+      : "The press outside the allowlist carries this story, ") +
+      "but the search could not reach a citable page for it. The claim is " +
       "not absent from the press, so it must not be called fabricated. " + reasoning;
-  } else if (beforeWindow) {
+  } else if (beforeWindow || undated) {
     verdict = "INSUFFICIENT_EVIDENCE";
     confidence = 0.4;
-    reasoning =
-      "The event is dated " + parsed.claim_date + ", but the news feeds only " +
-      "reach back to " + String(windowStart).slice(0, 16).replace("T", " ") +
-      ". The feeds cannot show that the press stayed silent about a day they " +
-      "do not cover, so absence proves nothing here. " + reasoning;
+    reasoning = (beforeWindow
+      ? "The event is dated " + parsed.claim_date + ", but the news feeds only " +
+        "reach back to " + String(windowStart).slice(0, 16).replace("T", " ") + ". "
+      : "The post carries no date, and the news feeds reach back only a few " +
+        "hours. ") +
+      "The feeds cannot show that the press stayed silent about a day they do " +
+      "not cover, so absence proves nothing here. " + reasoning;
   } else if (foreign) {
     verdict = "INSUFFICIENT_EVIDENCE";
     confidence = 0.4;
@@ -419,7 +463,7 @@ export function applyVerdictLogic(parsed, evidence, context) {
  * @returns {object}
  * @throws {Error} If the reply carries no usable JSON.
  */
-export function finishRun(finalText, retrieved, searchCount, backend, emit, headlines, windowStart, imagesRead) {
+export function finishRun(finalText, retrieved, searchCount, backend, emit, headlines, windowStart, imagesRead, searched) {
   if (!searchCount) {
     emit({ type: "stage", stage: "retrieve", previous: "salience", note: "no search run" });
   }
@@ -431,7 +475,8 @@ export function finishRun(finalText, retrieved, searchCount, backend, emit, head
   const grounded = groundingCheck(parsed.evidence, retrieved);
   const decided = applyVerdictLogic(parsed, grounded.kept, {
     headlines: headlines || 0,
-    windowStart: windowStart || null
+    windowStart: windowStart || null,
+    searched: searched === undefined ? null : searched
   });
 
   return {
@@ -443,6 +488,7 @@ export function finishRun(finalText, retrieved, searchCount, backend, emit, head
     claim_date: parsed.claim_date || "unknown",
     coverage_window_start: windowStart || null,
     press_carries_claim: parsed.press_carries_claim === true,
+    world_press_carries_claim: parsed.world_press_carries_claim === true,
     claim_scope: parsed.claim_scope === "foreign" ? "foreign" : "nepal",
     headlines: headlines || 0,
     salience: parsed.salience === "high" ? "high" : "low",
@@ -456,6 +502,7 @@ export function finishRun(finalText, retrieved, searchCount, backend, emit, head
     model_verdict: parsed.verdict || null,
     overridden: decided.overridden,
     searches_run: searchCount,
+    search_hits: searched === undefined ? null : searched,
     pages_retrieved: retrieved.size,
     retrieved_urls: Array.from(retrieved.keys()),
     raw_text: finalText

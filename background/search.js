@@ -415,13 +415,35 @@ export async function coverageWindow() {
  * @returns {Promise<{results: object[], headlines: object[], world: object[]}>}
  */
 export async function keylessSearch(query) {
-  const [factChecks, recent, headlines, world, coverage] = await Promise.all([
+  let [factChecks, recent, headlines, world, coverage] = await Promise.all([
     searchFactCheck(query),
     searchRecent(query),
     searchHeadlines(query),
     searchWorldHeadlines(query),
     coverageWindow()
   ]);
+
+  // Google News reads a query as every word joined by AND, so a long query
+  // returns nothing at all. When that happens, try again with the three words
+  // that carry the most meaning. Nothing found is a real answer; nothing
+  // searched is not.
+  let broadened = "";
+  if (!factChecks.length && !recent.length && !headlines.length && !world.length) {
+    const short = queryTokens(query).slice(0, 3).join(" ");
+    if (short && short !== query) {
+      broadened = short;
+      const retry = await Promise.all([
+        searchFactCheck(short),
+        searchRecent(short),
+        searchHeadlines(short),
+        searchWorldHeadlines(short)
+      ]);
+      factChecks = retry[0];
+      recent = retry[1];
+      headlines = retry[2];
+      world = retry[3];
+    }
+  }
 
   const seen = new Set();
   const results = [];
@@ -435,6 +457,10 @@ export async function keylessSearch(query) {
     results: results.slice(0, 8),
     headlines: headlines,
     world: world,
-    coverage: coverage
+    coverage: coverage,
+    broadened_to: broadened,
+    // Did the search work at all? A search that returns nothing anywhere,
+    // not even in the world press, says nothing about the claim.
+    searched: results.length + headlines.length + world.length
   };
 }

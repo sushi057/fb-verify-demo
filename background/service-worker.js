@@ -75,7 +75,7 @@ async function verify(msg, report) {
 
   return finishRun(
     run.finalText, run.retrieved, run.searchCount, "deepseek",
-    report, run.headlines, run.windowStart, images.length
+    report, run.headlines, run.windowStart, images.length, run.searched
   );
 }
 

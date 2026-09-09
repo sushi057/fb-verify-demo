@@ -115,15 +115,17 @@
   flex: none;
 }
 .vf-head-title {
-  font: 600 11px/1 var(--vf-mono);
-  letter-spacing: .16em;
+  font: 600 10.5px/1 var(--vf-mono);
+  letter-spacing: .12em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .vf-head-meta {
-  font: 400 10.5px/1 var(--vf-mono);
+  font: 400 10px/1 var(--vf-mono);
   color: #8fa0bd;
-  letter-spacing: .04em;
+  letter-spacing: .02em;
   margin-left: auto;
+  white-space: nowrap;
 }
 .vf-close {
   all: unset;
@@ -309,6 +311,50 @@
   color: var(--vf-text);
 }
 
+/* Once the run is done the stage list is history, so it shrinks out of the
+   way and leaves the verdict at the top of the card. */
+.vf-stages-done { padding: 2px 0 0; background: none; border: 0; }
+.vf-stages-done .vf-stage { padding: 0; font-size: 11.5px; }
+.vf-stages-done .vf-stage-key { font-size: 9px; padding: 2px 0; }
+.vf-stages-done .vf-stage-note { display: none; }
+
+.vf-coverage-line {
+  margin-top: 11px;
+  font: 400 12px/1.55 var(--vf-sans);
+  color: var(--vf-mute);
+  padding-left: 9px;
+  border-left: 2px solid var(--vf-rule);
+}
+
+.vf-link {
+  all: unset;
+  cursor: pointer;
+  font: 600 11.5px/1 var(--vf-mono);
+  color: var(--vf-blue);
+  margin-top: 4px;
+  display: inline-block;
+}
+.vf-link:hover { text-decoration: underline; }
+.vf-link:focus-visible { outline: 2px solid var(--vf-blue); outline-offset: 2px; }
+
+.vf-more-ev, .vf-more-why { display: none; }
+.vf-show-all .vf-more-ev, .vf-show-all .vf-more-why { display: block; }
+
+.vf-details { margin-top: 15px; border-top: 1px solid var(--vf-rule); }
+.vf-details > summary {
+  cursor: pointer;
+  padding: 9px 0 0;
+  font: 600 10px/1 var(--vf-mono);
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--vf-mute);
+  list-style: none;
+}
+.vf-details > summary::-webkit-details-marker { display: none; }
+.vf-details > summary::after { content: " +"; }
+.vf-details[open] > summary::after { content: " \2212"; }
+.vf-details > summary:hover { color: var(--vf-text); }
+
 /* ---------- sections ---------- */
 
 .vf-block { margin-top: 15px; }
@@ -431,6 +477,7 @@
   .vf-panel .vf-scale-mark { background: #ff6b80; }
   .vf-panel .vf-ev-quote { color: #c3c9d2; }
   .vf-panel .vf-error-title { color: #ff9aab; }
+  .vf-panel .vf-link { color: #9dbaf0; }
   .vf-panel .vf-conf-track { background: #3a3d42; }
   .vf-panel .vf-conf-fill { background: #8ab4f8; }
   .vf-panel .vf-ev-src { color: #cfe0ff; }

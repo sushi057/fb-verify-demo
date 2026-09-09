@@ -36,6 +36,32 @@
     return n;
   }
 
+  /**
+   * Cuts a string at a word break.
+   * @param {string} text
+   * @param {number} max
+   * @returns {string}
+   */
+  function trim(text, max) {
+    const t = String(text || "").trim();
+    if (t.length <= max) return t;
+    const cut = t.slice(0, max);
+    const space = cut.lastIndexOf(" ");
+    return (space > max * 0.6 ? cut.slice(0, space) : cut) + "\u2026";
+  }
+
+  /**
+   * Keeps the first sentences of a paragraph.
+   * @param {string} text
+   * @param {number} count
+   * @returns {string}
+   */
+  function firstSentences(text, count) {
+    const parts = String(text || "").match(/[^.!?]+[.!?]+/g);
+    if (!parts) return String(text || "");
+    return parts.slice(0, count).join(" ").trim();
+  }
+
   function clockNow() {
     const d = new Date();
     return String(d.getHours()).padStart(2, "0") + ":" +
@@ -52,6 +78,35 @@
    * @param {object} r The result.
    * @returns {Element|null}
    */
+  /**
+   * Says in one line what the check could read, and how the claim sits
+   * against it. The drawn scale lives in the details.
+   * @param {object} r
+   * @returns {string}
+   */
+  function coverageLine(r) {
+    if (!r.coverage_window_start) return "";
+    const hours = (Date.now() - Date.parse(r.coverage_window_start)) / 3600000;
+    const read = "Read " + hours.toFixed(0) + " h of Nepali news.";
+
+    // The window only matters when the verdict turned on it. Once a source
+    // has settled the claim, saying what the feeds could not see is noise.
+    if (r.evidence && r.evidence.some(function (e) {
+      return e.stance === "supports" || e.stance === "refutes";
+    })) {
+      return read;
+    }
+
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(r.claim_date || "")) {
+      return read + " The post carries no date, so that silence proves nothing.";
+    }
+    const claim = Date.parse(r.claim_date + "T12:00:00Z");
+    if (claim < Date.parse(r.coverage_window_start)) {
+      return read + " The post is older than that, so silence proves nothing.";
+    }
+    return read + " The post falls inside that window.";
+  }
+
   function renderCoverage(r) {
     if (!r.coverage_window_start) return null;
 
@@ -180,7 +235,8 @@
 
     const head = el("div", "vf-head");
     head.appendChild(el("span", "vf-head-title", "Verification record"));
-    head.appendChild(el("span", "vf-head-meta", clockNow()));
+    const meta = el("span", "vf-head-meta", clockNow());
+    head.appendChild(meta);
     const close = el("button", "vf-close", "\u00d7");
     close.setAttribute("aria-label", "Close this record");
     head.appendChild(close);
@@ -301,6 +357,12 @@
       row.appendChild(conf);
       body.appendChild(row);
 
+      // The stages mattered while it ran. Now the verdict does, so the list
+      // moves into the details and the header keeps the summary.
+      meta.textContent = r.searches_run + " searches \u00b7 " +
+        r.pages_retrieved + " pages";
+      list.remove();
+
       const chips = el("div", "vf-chips");
       chips.style.marginTop = "13px";
       chips.appendChild(el(
@@ -314,26 +376,98 @@
       }
       body.appendChild(chips);
 
-      const cover = renderCoverage(r);
-      if (cover) body.appendChild(cover);
+      const line = coverageLine(r);
+      if (line) body.appendChild(el("div", "vf-coverage-line", line));
 
-      const why = block("Why this verdict");
-      why.appendChild(el("div", "vf-text", r.verdict_reasoning || ""));
+      // The reason comes first and short. The rest is there if it is wanted.
+      const why = block("Why");
+      const full = r.verdict_reasoning || "";
+      const brief = firstSentences(full, 2);
+      why.appendChild(el("div", "vf-text", brief));
+      if (brief && full.length > brief.length + 20) {
+        const rest = el("div", "vf-text vf-more-why", full.slice(brief.length).trim());
+        why.appendChild(rest);
+        const moreWhy = el("button", "vf-link", "Read the full reasoning");
+        moreWhy.addEventListener("click", function () {
+          why.classList.add("vf-show-all");
+          moreWhy.remove();
+        });
+        why.appendChild(moreWhy);
+      }
       body.appendChild(why);
 
-      const sal = block("What the salience meant");
+      const items = r.evidence || [];
+      const ev = block("Evidence (" + items.length + ")");
+      if (!items.length) {
+        ev.appendChild(el("div", "vf-empty",
+          "No page in the source list mentions this claim."));
+      }
+
+      // Show the sources that carry weight. A refuting or supporting page
+      // decides the verdict; an irrelevant one only pads the list.
+      const ranked = items.slice().sort(function (a, b) {
+        const w = { refutes: 0, supports: 1, irrelevant: 2 };
+        return (w[a.stance] || 2) - (w[b.stance] || 2);
+      });
+      const FIRST = 2;
+
+      ranked.forEach(function (item, i) {
+        const rowEv = el("div", "vf-ev vf-ev-" + item.stance);
+        if (i >= FIRST) rowEv.classList.add("vf-more-ev");
+        const top = el("div", "vf-ev-top");
+        const a = el("a", "vf-ev-src", item.source_name);
+        a.href = item.url;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.title = item.url;
+        top.appendChild(a);
+        top.appendChild(el("span", "vf-stance vf-st-" + item.stance, item.stance));
+        rowEv.appendChild(top);
+        if (item.quote) {
+          rowEv.appendChild(el("div", "vf-ev-quote", trim(item.quote, 150)));
+        }
+        ev.appendChild(rowEv);
+      });
+
+      if (ranked.length > FIRST) {
+        const more = el("button", "vf-link",
+          "Show " + (ranked.length - FIRST) + " more");
+        more.addEventListener("click", function () {
+          ev.classList.add("vf-show-all");
+          more.remove();
+        });
+        ev.appendChild(more);
+      }
+      body.appendChild(ev);
+
+      // Everything below is detail. It stays folded until it is asked for.
+      const det = document.createElement("details");
+      det.className = "vf-details";
+      const sum = document.createElement("summary");
+      sum.textContent = "How this was checked";
+      det.appendChild(sum);
+
+      const cover = renderCoverage(r);
+      if (cover) det.appendChild(cover);
+
+      const stagesBlock = block("Stages");
+      list.classList.add("vf-stages-done");
+      stagesBlock.appendChild(list);
+      det.appendChild(stagesBlock);
+
+      const sal = block("Salience");
       sal.appendChild(el("div", "vf-text", r.salience_reasoning || ""));
       if (r.claim_scope === "foreign") {
         sal.appendChild(el("div", "vf-empty",
           "The claim is about another country, so the Nepali sources cannot " +
           "settle it."));
       }
-      body.appendChild(sal);
+      det.appendChild(sal);
 
       if (r.images_read && r.image_text) {
         const it = block("Text read from the image");
-        it.appendChild(el("div", "vf-ev-quote", r.image_text));
-        body.appendChild(it);
+        it.appendChild(el("div", "vf-ev-quote", trim(r.image_text, 300)));
+        det.appendChild(it);
       }
 
       if (r.claims && r.claims.length) {
@@ -341,30 +475,8 @@
         const ul = el("ul", "vf-list");
         r.claims.forEach(function (x) { ul.appendChild(el("li", null, x)); });
         c.appendChild(ul);
-        body.appendChild(c);
+        det.appendChild(c);
       }
-
-      const ev = block("Evidence (" + (r.evidence || []).length + ")");
-      if (!r.evidence || !r.evidence.length) {
-        ev.appendChild(el("div", "vf-empty",
-          "No page in the source list mentions this claim."));
-      }
-      (r.evidence || []).forEach(function (item) {
-        const rowEv = el("div", "vf-ev vf-ev-" + item.stance);
-        const top = el("div", "vf-ev-top");
-        const a = el("a", "vf-ev-src", item.source_name);
-        a.href = item.url;
-        a.target = "_blank";
-        a.rel = "noopener noreferrer";
-        top.appendChild(a);
-        top.appendChild(el("span", "vf-stance vf-st-" + item.stance, item.stance));
-        rowEv.appendChild(top);
-        rowEv.appendChild(el("div", "vf-ev-url", item.url));
-        rowEv.appendChild(el("div", "vf-ev-date", "read " + item.retrieved_at));
-        if (item.quote) rowEv.appendChild(el("div", "vf-ev-quote", item.quote));
-        ev.appendChild(rowEv);
-      });
-      body.appendChild(ev);
 
       if (r.dropped_citations && r.dropped_citations.length) {
         const d = block("Citations dropped");
@@ -372,8 +484,10 @@
         r.dropped_citations.forEach(function (x) { ul.appendChild(el("li", null, x)); });
         d.appendChild(ul);
         d.classList.add("vf-dropped");
-        body.appendChild(d);
+        det.appendChild(d);
       }
+
+      body.appendChild(det);
 
       body.appendChild(el("div", "vf-foot",
         "A model wrote this. Read the sources before you repeat it."));
