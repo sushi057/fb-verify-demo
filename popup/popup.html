@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Verify</title>
+<style>
+  :root {
+    --ink: #0E1626; --ink-2: #1a2436; 
+    --rule: #27334a; --mute: #8fa0bd; --crimson: #b3122f; --green: #0e7a55;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    width: 320px; margin: 0; background: var(--ink); color: #fff;
+    font-family: var(--sans);
+  }
+  header { padding: 15px 16px 13px; border-bottom: 1px solid var(--rule); }
+  .mark { display: flex; align-items: center; gap: 8px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--crimson); }
+  h1 {
+    margin: 0; font: 600 11px/1 var(--mono);
+    letter-spacing: .18em; text-transform: uppercase;
+  }
+  .sub { margin: 7px 0 0; font-size: 12px; line-height: 1.55; color: var(--mute); }
+  main { padding: 15px 16px 17px; }
+  label {
+    display: block; font: 600 10px/1 var(--mono); letter-spacing: .12em;
+    text-transform: uppercase; color: var(--mute); margin-bottom: 6px;
+  }
+  input {
+    width: 100%; padding: 9px 10px; border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--ink-2); color: #fff; font: 12px/1.3 var(--mono);
+  }
+  input:focus { outline: 2px solid #3d5a9e; outline-offset: 1px; }
+  button {
+    width: 100%; margin-top: 10px; padding: 10px; border: 0; border-radius: 3px;
+    background: #fff; color: var(--ink); cursor: pointer;
+    font: 600 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase;
+  }
+  button:hover { background: #dfe6f2; }
+  button.ghost { background: transparent; color: var(--mute); border: 1px solid var(--rule); }
+  button.ghost:hover { background: var(--ink-2); color: #fff; }
+  .status {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 13px;
+    font: 400 11.5px/1.4 var(--mono);
+  }
+  .status .pip { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+  .ok .pip { background: var(--green); } .ok { color: #7fd7b4; }
+  .no .pip { background: var(--crimson); } .no { color: #f2a3b0; }
+  .steps { margin: 13px 0 0; padding: 0; list-style: none; }
+  .steps li {
+    display: grid; grid-template-columns: 16px 1fr; gap: 8px;
+    font-size: 11.5px; line-height: 1.5; color: var(--mute); margin-bottom: 6px;
+  }
+  .steps b { color: #fff; font: 600 10px/1.4 var(--mono); }
+  a { color: #9db8ef; }
+  footer {
+    padding: 11px 16px; border-top: 1px solid var(--rule);
+    font: 400 10.5px/1.5 var(--mono); color: var(--mute);
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="mark"><span class="dot"></span><h1>Verify</h1></div>
+    <p class="sub">Checks a Facebook post against Nepali fact checks, Nepali
+      news and six international outlets.</p>
+  </header>
+
+  <main>
+    <div id="status" class="status no"><span class="pip"></span><span id="statusText">Checking…</span></div>
+
+    <label for="key">DeepSeek API key</label>
+    <input id="key" type="password" placeholder="sk-..." autocomplete="off" spellcheck="false">
+    <button id="save">Save key</button>
+    <button id="clear" class="ghost" style="margin-top:7px">Remove key</button>
+
+    <ol class="steps">
+      <li><b>1</b><span>Get a key at <a href="https://platform.deepseek.com/" target="_blank" rel="noreferrer">platform.deepseek.com</a>.</span></li>
+      <li><b>2</b><span>Paste it above and save.</span></li>
+      <li><b>3</b><span>Open Facebook, reload, then click Verify on a post.</span></li>
+    </ol>
+  </main>
+
+  <footer>The key stays in this browser. Nothing else is stored.</footer>
+  <script src="popup.js"></script>
+</body>
+</html>

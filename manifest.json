@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Verify — Misinformation Check (Classroom Demo)",
+  "version": "0.1.0",
+  "description": "Classroom demo. Adds a Verify button to Facebook posts and shows a verdict with an evidence trail. Needs only a DeepSeek API key.",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.deepseek.com/*",
+    "https://news.google.com/*",
+    "https://nepalfactcheck.org/*",
+    "https://*.onlinekhabar.com/*",
+    "https://*.setopati.com/*",
+    "https://techpana.com/*",
+    "https://kathmandupost.com/*",
+    "https://ekantipur.com/*",
+    "https://*.gov.np/*",
+    "https://feeds.bbci.co.uk/*",
+    "https://*.aljazeera.com/*",
+    "https://*.theguardian.com/*",
+    "https://*.straitstimes.com/*",
+    "https://*.channelnewsasia.com/*",
+    "https://feeds.feedburner.com/*",
+    "https://*.fbcdn.net/*",
+    "https://*.facebook.com/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.facebook.com/*",
+        "https://web.facebook.com/*",
+        "https://m.facebook.com/*"
+      ],
+      "js": [
+        "content/selectors.js",
+        "content/panel.js",
+        "content/content.js"
+      ],
+      "css": [
+        "content/styles.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Verify — misinformation check"
+  }
+}
