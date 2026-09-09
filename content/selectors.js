@@ -156,19 +156,67 @@
    * @param {Element} post
    * @returns {string} The post text. It can be empty.
    */
+  /**
+   * Tells whether a string is a machine token rather than something a person
+   * wrote. Facebook hides such strings in a post, and they are long enough to
+   * beat the caption when the longest block wins.
+   * @param {string} text
+   * @returns {boolean}
+   */
+  function looksLikeToken(text) {
+    const t = text.trim();
+    if (t.length < 16) return false;
+    if (/\s/.test(t)) return false;
+    // No spaces, and a mix of cases or digits: that is an identifier.
+    return /[A-Za-z]/.test(t) && /[0-9A-Z]/.test(t) && !/^https?:/i.test(t);
+  }
+
+  /**
+   * Opens a post that Facebook has folded behind "See more".
+   *
+   * Facebook does not keep the rest of the caption in the page, so a folded
+   * post can only be read after the button is pressed. Only do this when the
+   * reader has asked for a check.
+   *
+   * @param {Element} post
+   * @returns {boolean} True if something was opened.
+   */
+  FBSelect.expandPost = function (post) {
+    const buttons = Array.from(post.querySelectorAll('[role="button"]'));
+    const more = buttons.find(function (b) {
+      const label = ((b.innerText || "") + " " + (b.getAttribute("aria-label") || ""))
+        .trim().toLowerCase();
+      return /^see more$|see more$|थप हेर्नुहोस्|अझै हेर्नुहोस्/.test(label);
+    });
+    if (!more) return false;
+    more.click();
+    return true;
+  };
+
   FBSelect.extractText = function (post) {
     const blocks = Array.from(post.querySelectorAll('div[dir="auto"], span[dir="auto"]'))
       .filter(function (b) {
         if (b.closest('[role="button"]')) return false;
         if (b.closest("form")) return false;
+        // Never read our own panel or button back as post text.
+        if (b.closest(".vf-btn") || b.closest(".vf-panel")) return false;
+        // Facebook hides tokens and decoy text in the post. They are not
+        // content, and they must not reach the model.
+        if (b.closest('[aria-hidden="true"]')) return false;
+        const rect = b.getBoundingClientRect();
+        if (rect.width < 2 || rect.height < 2) return false;
         // Skip a block that only wraps other blocks.
         return !b.querySelector('div[dir="auto"]');
       })
       .map(function (b) { return (b.innerText || "").trim(); })
-      .filter(function (t) { return t.length > 0; });
+      .filter(function (t) { return t.length > 0 && !looksLikeToken(t); });
 
     if (blocks.length === 0) {
-      return (post.innerText || "").trim().slice(0, 2000);
+      const clone = post.cloneNode(true);
+      Array.from(clone.querySelectorAll(".vf-btn, .vf-panel")).forEach(function (n) {
+        n.remove();
+      });
+      return (clone.innerText || "").trim().slice(0, 2000);
     }
 
     blocks.sort(function (a, b) { return b.length - a.length; });

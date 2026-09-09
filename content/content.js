@@ -12,6 +12,18 @@
   "use strict";
 
   const PROCESSED = window.FBSelect.PROCESSED_ATTR;
+  const TEXT_MARK = "data-verify-text";
+
+  /**
+   * A short fingerprint of a post's text, used to notice when Facebook has
+   * reused the slot for something else.
+   * @param {Element} post
+   * @returns {string}
+   */
+  function textKey(post) {
+    const t = window.FBSelect.extractText(post);
+    return String(t.length) + ":" + t.slice(0, 40);
+  }
 
   /** What the last scans found. window.verifyReport() prints it. */
   const report = { scans: 0, placed: 0, posts: [] };
@@ -40,7 +52,15 @@
    * @param {Element} post
    */
   function verifyPost(post, anchor) {
-    const text = window.FBSelect.extractText(post);
+    // A folded post holds only the first line, and the rest is not in the
+    // page at all. Open it before reading, or the check runs on half a claim.
+    let text = window.FBSelect.extractText(post);
+    if (/\u2026\s*See more$|See more$/i.test(text) || text.length < 60) {
+      if (window.FBSelect.expandPost(post)) {
+        const opened = window.FBSelect.extractText(post);
+        if (opened.length > text.length) text = opened;
+      }
+    }
     const imageUrls = window.FBSelect.findImages(post);
     const panel = window.VerifyPanel.createPanel(anchor);
 
@@ -151,8 +171,17 @@
    * @returns {boolean} True if a button was placed.
    */
   function attachButton(post) {
-    if (post.getAttribute(PROCESSED) === "1") return false;
+    // Facebook reuses a feed slot for a new post as you scroll. The mark alone
+    // is not enough: if the button that went with the mark is gone, or the
+    // slot now holds different text, the slot must be treated as new.
+    if (post.getAttribute(PROCESSED) === "1") {
+      const existing = post.querySelector(":scope .vf-btn");
+      const sameText = post.getAttribute(TEXT_MARK) === textKey(post);
+      if (existing && sameText) return false;
+      if (existing) existing.remove();
+    }
     post.setAttribute(PROCESSED, "1");
+    post.setAttribute(TEXT_MARK, textKey(post));
 
     const mount = window.FBSelect.findMountPoint(post);
     const btn = makeButton();
@@ -238,14 +267,15 @@
     });
     observer.observe(target, { childList: true, subtree: true });
 
-    // The feed can arrive after the first scan. Keep looking for a while.
-    let tries = 0;
-    const poll = setInterval(function () {
-      tries += 1;
-      const more = scan();
-      if (more) console.info("[Verify] " + more + " more post(s) found.");
-      if (tries > 20) clearInterval(poll);
-    }, 1000);
+    // Facebook fills a post only when it comes near the screen, so a scroll
+    // brings new work. Rescan on scroll, and keep a slow beat as well.
+    let scrollTimer = 0;
+    window.addEventListener("scroll", function () {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(scan, 350);
+    }, { passive: true });
+
+    setInterval(scan, 2500);
   }
 
   if (document.readyState === "loading") {
