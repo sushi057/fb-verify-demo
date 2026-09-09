@@ -95,6 +95,7 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
   const headlineTitles = new Set();
   let windowStart = null;
   let searchedTotal = 0;
+  let elapsed = 0;
 
   const userContent = [];
   userContent.push({
@@ -144,7 +145,21 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
     };
     if (!forceAnswer) body.tools = [SEARCH_TOOL];
 
-    const message = await deepseekCall(body, apiKey);
+    const waiting = setInterval(function () {
+      elapsed += 5;
+      emit({
+        type: "stage",
+        stage: forceAnswer || sawSearch ? "stance" : "decompose",
+        note: elapsed + "s"
+      });
+    }, 5000);
+
+    let message;
+    try {
+      message = await deepseekCall(body, apiKey);
+    } finally {
+      clearInterval(waiting);
+    }
 
     messages.push(message);
 
@@ -271,6 +286,15 @@ export async function runDeepSeek(systemPrompt, text, imageDataUrls, emit, apiKe
       emit({ type: "stage", stage: "retrieve", note: retrieved.size + " pages" });
       emit({ type: "retrieved", count: retrieved.size });
     }
+
+    // The model now reads what came back. That takes most of the run, so the
+    // panel must not sit on "Search the sources" while it happens.
+    emit({
+      type: "stage",
+      stage: "stance",
+      previous: "retrieve",
+      note: "reading " + retrieved.size + " pages"
+    });
   }
 
   if (!finalText || !finalText.trim()) {

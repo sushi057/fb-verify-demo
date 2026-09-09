@@ -256,19 +256,54 @@ export function sourceNameFor(url, fallback) {
  * @throws {Error} If no valid JSON is found.
  */
 export function parseResult(text) {
-  let raw = null;
-  const tagged = text.match(/<result>([\s\S]*?)<\/result>/i);
-  if (tagged) {
-    raw = tagged[1];
-  } else {
-    const start = text.indexOf("{");
-    const end = text.lastIndexOf("}");
-    if (start !== -1 && end > start) raw = text.slice(start, end + 1);
-  }
-  if (!raw) throw new Error("The model reply had no JSON result block.");
+  const tagged = /<result>([\s\S]*?)<\/result>/i.exec(text);
+  const body = tagged ? tagged[1] : text;
 
-  raw = raw.replace(/^\s*```(?:json)?/i, "").replace(/```\s*$/, "");
+  const raw = firstJsonObject(body);
+  if (!raw) {
+    throw new Error("The model reply had no JSON result block.");
+  }
   return JSON.parse(raw);
+}
+
+/**
+ * Pulls the first complete JSON object out of a string.
+ *
+ * The model often writes a line of prose after the object, or wraps it in a
+ * code fence. Reading to the last brace then fails. This counts braces
+ * instead, and ignores any brace inside a string.
+ *
+ * @param {string} text
+ * @returns {string|null} The object, or null if there is none.
+ */
+export function firstJsonObject(text) {
+  const s = String(text || "");
+  const start = s.indexOf("{");
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < s.length; i += 1) {
+    const ch = s[i];
+
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth += 1;
+    else if (ch === "}") {
+      depth -= 1;
+      if (depth === 0) return s.slice(start, i + 1);
+    }
+  }
+
+  return null;
 }
 
 /**

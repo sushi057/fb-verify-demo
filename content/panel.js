@@ -309,7 +309,11 @@
     function setStage(key, state, note) {
       const li = nodes[key];
       if (!li) return;
-      li.className = "vf-stage vf-stage-" + state;
+      // A stage that is already done must not go back to active.
+      const wasDone = li.classList.contains("vf-stage-done");
+      if (!(wasDone && state === "active")) {
+        li.className = "vf-stage vf-stage-" + state;
+      }
       if (note !== undefined) li.querySelector(".vf-stage-note").textContent = note;
     }
 
